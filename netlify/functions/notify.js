@@ -8,15 +8,18 @@ function safeEqual(a, b) {
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
-export const handler = async (event) => {
-  if (event.httpMethod !== 'GET') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+export default async (req) => {
+  if (req.method !== 'GET') {
+    return new Response('Method Not Allowed', { status: 405 });
   }
 
-  const { token, title, body } = event.queryStringParameters ?? {};
+  const url = new URL(req.url);
+  const token = url.searchParams.get('token') ?? '';
+  const title = url.searchParams.get('title') || 'Armador';
+  const body = url.searchParams.get('body') || '';
 
-  if (!safeEqual(token ?? '', process.env.NOTIFY_TOKEN ?? '')) {
-    return { statusCode: 401, body: 'Unauthorized' };
+  if (!safeEqual(token, process.env.NOTIFY_TOKEN ?? '')) {
+    return new Response('Unauthorized', { status: 401 });
   }
 
   webpush.setVapidDetails(
@@ -25,10 +28,7 @@ export const handler = async (event) => {
     process.env.VAPID_PRIVATE_KEY
   );
 
-  const notifTitle = title || 'Armador';
-  const notifBody = body || '';
-  const payload = JSON.stringify({ title: notifTitle, body: notifBody });
-
+  const payload = JSON.stringify({ title, body });
   const store = getStore('subscriptions');
   const { blobs } = await store.list();
 
@@ -54,9 +54,8 @@ export const handler = async (event) => {
     })
   );
 
-  return {
-    statusCode: 200,
+  return new Response(JSON.stringify({ sent, failed }), {
+    status: 200,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sent, failed }),
-  };
+  });
 };
