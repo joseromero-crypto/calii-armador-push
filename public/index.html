@@ -98,11 +98,25 @@
       navigator.serviceWorker.register('/sw.js').then(reg => {
         swReg = reg;
         if (Notification.permission === 'granted') {
-          reg.pushManager.getSubscription().then(sub => {
-            if (sub) {
-              btn.disabled = true;
-              btn.textContent = 'Activado ✅';
-              setStatus('Notificaciones activas.');
+          reg.pushManager.getSubscription().then(async sub => {
+            if (!sub) return;
+            // Always re-POST on load — ensures server has the subscription
+            // even if a previous attempt failed (e.g. a 502 on first subscribe).
+            try {
+              const res = await fetch('/api/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(sub),
+              });
+              if (res.ok) {
+                btn.disabled = true;
+                btn.textContent = 'Activado ✅';
+                setStatus('Notificaciones activas.');
+              } else {
+                setStatus('Error al sincronizar: HTTP ' + res.status);
+              }
+            } catch (err) {
+              setStatus('Error al sincronizar: ' + err.message);
             }
           });
         }
