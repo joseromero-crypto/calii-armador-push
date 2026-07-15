@@ -4,15 +4,3 @@
 
 [functions]
   node_bundler = "esbuild"
-
-[[redirects]]
-  from = "/api/notify"
-  to = "/.netlify/functions/notify"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/subscribe"
-  to = "/.netlify/functions/subscribe"
-  status = 200
-  force = true

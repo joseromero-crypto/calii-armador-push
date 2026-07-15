@@ -2,6 +2,8 @@ import { getStore } from '@netlify/blobs';
 import { timingSafeEqual } from 'crypto';
 import webpush from 'web-push';
 
+export const config = { path: '/api/notify' };
+
 function safeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   if (a.length !== b.length) return false;

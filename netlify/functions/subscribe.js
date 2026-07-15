@@ -1,6 +1,8 @@
 import { getStore } from '@netlify/blobs';
 import { createHash } from 'crypto';
 
+export const config = { path: '/api/subscribe' };
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
