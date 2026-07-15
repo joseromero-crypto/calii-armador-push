@@ -1,0 +1,14 @@
+{
+  "name": "calii-armador-push",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Web Push PWA for Calii Armador attendance alerts",
+  "scripts": {
+    "dev": "netlify dev",
+    "generate-icons": "node scripts/make-icons.js"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0",
+    "web-push": "^3.6.7"
+  }
+}

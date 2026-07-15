@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Armador">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="manifest" href="/manifest.json">
+  <title>Calii Armador</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: #111;
+      color: #eee;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      padding: 32px 24px;
+      text-align: center;
+    }
+    .bell { font-size: 64px; line-height: 1; }
+    h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+    #hint {
+      font-size: 13px;
+      color: #f59e0b;
+      background: #1c1a0e;
+      border: 1px solid #78350f;
+      border-radius: 10px;
+      padding: 10px 16px;
+      max-width: 320px;
+      line-height: 1.5;
+    }
+    #hint.hidden { display: none; }
+    button {
+      background: #f59e0b;
+      color: #000;
+      font-size: 17px;
+      font-weight: 700;
+      border: none;
+      border-radius: 14px;
+      padding: 16px 40px;
+      cursor: pointer;
+      min-width: 220px;
+    }
+    button:disabled {
+      background: #555;
+      color: #999;
+      cursor: default;
+    }
+    #status {
+      font-size: 15px;
+      color: #aaa;
+      min-height: 22px;
+    }
+  </style>
+</head>
+<body>
+  <div class="bell">🔔</div>
+  <h1>Calii Armador</h1>
+
+  <div id="hint">
+    ⚠️ Para activar notificaciones en iPhone, abre esta página desde el ícono en tu pantalla de inicio — no desde Safari directamente.
+  </div>
+
+  <button id="btn" onclick="enable()">Activar notificaciones</button>
+  <div id="status"></div>
+
+  <script>
+    const VAPID_PUBLIC_KEY = 'BOu24otmA9iidMs1G2rJirP0lYRZApua4X0NEfLKPpvJxNvNdcRIb7HydFu6zVIkATKy_2ae7eyngFWYKWxa3Iw';
+
+    const hint = document.getElementById('hint');
+    const btn = document.getElementById('btn');
+    const statusEl = document.getElementById('status');
+
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+
+    if (isStandalone) hint.classList.add('hidden');
+
+    function setStatus(msg) { statusEl.textContent = msg; }
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = atob(base64);
+      return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+    }
+
+    let swReg = null;
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        swReg = reg;
+        if (Notification.permission === 'granted') {
+          reg.pushManager.getSubscription().then(sub => {
+            if (sub) {
+              btn.disabled = true;
+              btn.textContent = 'Activado ✅';
+              setStatus('Notificaciones activas.');
+            }
+          });
+        }
+      }).catch(err => setStatus('Error al registrar SW: ' + err.message));
+    } else {
+      btn.disabled = true;
+      setStatus('Service workers no soportados en este navegador.');
+    }
+
+    async function enable() {
+      if (!swReg) { setStatus('Service worker no listo. Recarga e intenta de nuevo.'); return; }
+
+      btn.disabled = true;
+      setStatus('Solicitando permiso…');
+
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        btn.disabled = false;
+        setStatus('Permiso denegado. Actívalo en Configuración > Notificaciones.');
+        return;
+      }
+
+      setStatus('Suscribiendo…');
+      let sub;
+      try {
+        sub = await swReg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+      } catch (err) {
+        btn.disabled = false;
+        setStatus('Error al suscribir: ' + err.message);
+        return;
+      }
+
+      setStatus('Guardando suscripción…');
+      try {
+        const res = await fetch('/api/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sub),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+      } catch (err) {
+        btn.disabled = false;
+        setStatus('Error al guardar: ' + err.message);
+        return;
+      }
+
+      btn.textContent = 'Activado ✅';
+      setStatus('Listo. Recibirás alertas cada mañana.');
+    }
+  </script>
+</body>
+</html>
