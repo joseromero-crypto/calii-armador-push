@@ -36,10 +36,11 @@ export default async (req) => {
   }
 
   const id = payload?.id;
-  if (!id) return new Response('Missing id', { status: 400 });
+  const force = payload?.force === true;
+  if (!id && !force) return new Response('Missing id', { status: 400 });
 
   const state = await store.get('current', { type: 'json' });
-  if (state && state.id === id) {
+  if (state && (force || state.id === id)) {
     await store.setJSON('current', { ...state, acknowledged: true });
   }
 

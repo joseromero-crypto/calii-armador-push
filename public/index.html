@@ -53,6 +53,15 @@
       color: #999;
       cursor: default;
     }
+    #stopBtn {
+      background: transparent;
+      color: #f59e0b;
+      border: 1px solid #f59e0b;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 10px 24px;
+      min-width: 0;
+    }
     #status {
       font-size: 15px;
       color: #aaa;
@@ -69,6 +78,7 @@
   </div>
 
   <button id="btn" onclick="enable()">Activar notificaciones</button>
+  <button id="stopBtn" onclick="stopAlarm()">Detener alarma</button>
   <div id="status"></div>
 
   <script>
@@ -168,6 +178,20 @@
 
       btn.textContent = 'Activado ✅';
       setStatus('Listo. Recibirás alertas cada mañana.');
+    }
+
+    async function stopAlarm() {
+      setStatus('Deteniendo alarma…');
+      try {
+        const res = await fetch('/api/ack', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force: true }),
+        });
+        setStatus(res.ok ? 'Alarma detenida.' : 'Error: HTTP ' + res.status);
+      } catch (err) {
+        setStatus('Error al detener: ' + err.message);
+      }
     }
   </script>
 </body>
