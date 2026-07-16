@@ -45,44 +45,31 @@ Blobs are enabled automatically for all Netlify sites — no extra steps needed.
 
 ---
 
-## V3: the alarm (rings until dismissed)
+## V3: full-tune alarm via a custom default ringtone
 
-iOS does not allow custom notification sounds for web push (or PWAs generally) —
-only the system default sound. `/api/notify` (below) still exists and fires that
-sound **once**. `/api/alarm` is the V3 endpoint: it's a **background function**
-that keeps re-sending the push every 8 seconds (each one plays the default
-sound + vibration again via `renotify`) for up to 5 minutes, or until you tap
-the notification on your phone — whichever comes first. That's what makes it
-feel like an alarm instead of a ping.
+The web push payload itself can't specify a custom sound — iOS doesn't honor
+that. But a notification that doesn't request its own sound falls back to
+whatever you've set as your phone's **default alert sound**, and that default
+*can* be a custom ringtone up to 30+ seconds long. Set a custom ringtone as
+your default alert sound (Settings → Sounds & Haptics), and a single
+`/api/notify` ping plays that ringtone in full — a real tune, no server-side
+repeat needed.
 
-How it works: `/api/alarm` writes an alarm id to Netlify Blobs and loops,
-checking that id before every ring. Tapping the notification runs the
-service worker's `notificationclick` handler, which POSTs to `/api/ack` and
-marks that id acknowledged — the loop sees this on its next check (≤8s) and
-stops. Triggering a new alarm while one is ringing supersedes the old one
-(its loop sees a different id and stops).
+`/api/alarm` + `/api/ack` (a background function that re-sent the push every
+few seconds until dismissed) were built first, while chasing a "loud alarm"
+before this simpler fix was found. They're still deployed and working, just
+unused by the daily wiring — a fallback if the ringtone approach ever stops
+being available (new phone, reset settings, etc.). See them in
+`netlify/functions/alarm.js` / `ack.js` and the **Detener alarma** button in
+the PWA if you ever need them.
 
-Both endpoints share the same `NOTIFY_TOKEN` and query-string params
-(`token`, `title`, `body`) — no new secrets needed.
-
-### Test the alarm
-
-```
-https://alarm6am.netlify.app/api/alarm?token=JoS9t4NekJ4drs5eclMyJXwFLllnnM_5&title=Test&body=Funciona
-```
-
-You'll get an immediate 202-style response with no visible content (it's a
-background function), then repeated pings on your phone. Tap the notification
-to stop it, or wait 5 minutes for the automatic cutoff.
-
-### Test a single ping (no repeat)
+### Test a ping
 
 ```
 https://alarm6am.netlify.app/api/notify?token=JoS9t4NekJ4drs5eclMyJXwFLllnnM_5&title=Test&body=Funciona
 ```
 
-Bad token (expect 401, `/api/notify` only — `/api/alarm` always returns 202 by
-platform design):
+Bad token (expect 401):
 ```
 https://alarm6am.netlify.app/api/notify?token=wrong&title=X&body=Y
 ```
@@ -92,18 +79,17 @@ https://alarm6am.netlify.app/api/notify?token=wrong&title=X&body=Y
 ## Paste these into your three scheduled tasks (V3 wiring)
 
 Add one `web_fetch` call at the **end** of each task run, pointed at
-`/api/alarm` (not `/api/notify`) so it rings until dismissed. Both "all good"
-and "problem" runs trigger it.
+`/api/notify`. Both "all good" and "problem" runs trigger it.
 
 ### All good
 ```
-https://alarm6am.netlify.app/api/alarm?token=JoS9t4NekJ4drs5eclMyJXwFLllnnM_5&title=%E2%9C%85%20Todo%20bien&body=A%20dormir
+https://alarm6am.netlify.app/api/notify?token=JoS9t4NekJ4drs5eclMyJXwFLllnnM_5&title=%E2%9C%85%20Todo%20bien&body=A%20dormir
 ```
 Title: `✅ Todo bien` · Body: `A dormir`
 
 ### Problem (replace body with your URL-encoded failed-hub list)
 ```
-https://alarm6am.netlify.app/api/alarm?token=JoS9t4NekJ4drs5eclMyJXwFLllnnM_5&title=%E2%9A%A0%EF%B8%8F%20Revisar&body=MH%20Guadalupe%202%2F5%20(40%25)
+https://alarm6am.netlify.app/api/notify?token=JoS9t4NekJ4drs5eclMyJXwFLllnnM_5&title=%E2%9A%A0%EF%B8%8F%20Revisar&body=MH%20Guadalupe%202%2F5%20(40%25)
 ```
 Title: `⚠️ Revisar` · Body: the failed-hub summary, URL-encoded
 
