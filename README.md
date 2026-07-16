@@ -45,36 +45,65 @@ Blobs are enabled automatically for all Netlify sites — no extra steps needed.
 
 ---
 
-## Test the push (verify it works end-to-end)
+## V3: the alarm (rings until dismissed)
 
-Paste this URL into any browser while logged into nothing — it just needs to reach the internet:
+iOS does not allow custom notification sounds for web push (or PWAs generally) —
+only the system default sound. `/api/notify` (below) still exists and fires that
+sound **once**. `/api/alarm` is the V3 endpoint: it's a **background function**
+that keeps re-sending the push every 8 seconds (each one plays the default
+sound + vibration again via `renotify`) for up to 5 minutes, or until you tap
+the notification on your phone — whichever comes first. That's what makes it
+feel like an alarm instead of a ping.
+
+How it works: `/api/alarm` writes an alarm id to Netlify Blobs and loops,
+checking that id before every ring. Tapping the notification runs the
+service worker's `notificationclick` handler, which POSTs to `/api/ack` and
+marks that id acknowledged — the loop sees this on its next check (≤8s) and
+stops. Triggering a new alarm while one is ringing supersedes the old one
+(its loop sees a different id and stops).
+
+Both endpoints share the same `NOTIFY_TOKEN` and query-string params
+(`token`, `title`, `body`) — no new secrets needed.
+
+### Test the alarm
+
+```
+https://alarm6am.netlify.app/api/alarm?token=JoS9t4NekJ4drs5eclMyJXwFLllnnM_5&title=Test&body=Funciona
+```
+
+You'll get an immediate 202-style response with no visible content (it's a
+background function), then repeated pings on your phone. Tap the notification
+to stop it, or wait 5 minutes for the automatic cutoff.
+
+### Test a single ping (no repeat)
 
 ```
 https://alarm6am.netlify.app/api/notify?token=JoS9t4NekJ4drs5eclMyJXwFLllnnM_5&title=Test&body=Funciona
 ```
 
-You should see a notification on your phone within a few seconds.
-
-Bad token (expect 401):
+Bad token (expect 401, `/api/notify` only — `/api/alarm` always returns 202 by
+platform design):
 ```
 https://alarm6am.netlify.app/api/notify?token=wrong&title=X&body=Y
 ```
 
 ---
 
-## Paste these into your three scheduled tasks (V2 wiring)
+## Paste these into your three scheduled tasks (V3 wiring)
 
-Add one `web_fetch` call at the **end** of each task run. Both "all good" and "problem" runs get a push.
+Add one `web_fetch` call at the **end** of each task run, pointed at
+`/api/alarm` (not `/api/notify`) so it rings until dismissed. Both "all good"
+and "problem" runs trigger it.
 
 ### All good
 ```
-https://alarm6am.netlify.app/api/notify?token=JoS9t4NekJ4drs5eclMyJXwFLllnnM_5&title=%E2%9C%85%20Todo%20bien&body=A%20dormir
+https://alarm6am.netlify.app/api/alarm?token=JoS9t4NekJ4drs5eclMyJXwFLllnnM_5&title=%E2%9C%85%20Todo%20bien&body=A%20dormir
 ```
 Title: `✅ Todo bien` · Body: `A dormir`
 
 ### Problem (replace body with your URL-encoded failed-hub list)
 ```
-https://alarm6am.netlify.app/api/notify?token=JoS9t4NekJ4drs5eclMyJXwFLllnnM_5&title=%E2%9A%A0%EF%B8%8F%20Revisar&body=MH%20Guadalupe%202%2F5%20(40%25)
+https://alarm6am.netlify.app/api/alarm?token=JoS9t4NekJ4drs5eclMyJXwFLllnnM_5&title=%E2%9A%A0%EF%B8%8F%20Revisar&body=MH%20Guadalupe%202%2F5%20(40%25)
 ```
 Title: `⚠️ Revisar` · Body: the failed-hub summary, URL-encoded
 
@@ -85,7 +114,7 @@ Title: `⚠️ Revisar` · Body: the failed-hub summary, URL-encoded
 - `%` → `%25`
 - `,` → `%2C`
 
-The V1 Slack self-DM post stays in place — V2 is additive.
+The V1 Slack self-DM post stays in place — V3 is additive.
 
 ---
 
