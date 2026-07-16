@@ -17,7 +17,9 @@ self.addEventListener('push', event => {
       body,
       icon: '/icon-192.png',
       badge: '/icon-192.png',
-      tag: 'armador',
+      // iOS Safari doesn't pass `data` through to notificationclick, so the
+      // alarm id rides on `tag` too — iOS does deliver that one reliably.
+      tag: alarmId || 'armador',
       renotify: true,
       requireInteraction: true,
       data: { alarmId },
@@ -26,7 +28,7 @@ self.addEventListener('push', event => {
 });
 
 self.addEventListener('notificationclick', event => {
-  const alarmId = event.notification.data?.alarmId;
+  const alarmId = event.notification.data?.alarmId || event.notification.tag;
   event.notification.close();
 
   event.waitUntil(
