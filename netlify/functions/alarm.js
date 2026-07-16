@@ -5,7 +5,7 @@ import { safeEqual } from './lib/safe-equal.js';
 // Background function: platform returns 202 immediately, this keeps running.
 export const config = { path: '/api/alarm', background: true };
 
-const RING_INTERVAL_MS = 1000;
+const RING_INTERVAL_MS = 2000;
 const MAX_DURATION_MS = 5 * 60 * 1000; // safety stop if never acknowledged
 
 function sleep(ms) {
