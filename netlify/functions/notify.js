@@ -1,6 +1,7 @@
-import { getStore } from '@netlify/blobs';
 import webpush from 'web-push';
 import { safeEqual } from './lib/safe-equal.js';
+import { fanOutPush } from './lib/send-push.js';
+import { recordInvocation } from './lib/audit-log.js';
 
 export const config = { path: '/api/notify' };
 
@@ -13,8 +14,22 @@ export default async (req) => {
   const token = url.searchParams.get('token') ?? '';
   const title = url.searchParams.get('title') || 'Armador';
   const body = url.searchParams.get('body') || '';
+  const tokenValid = safeEqual(token, process.env.NOTIFY_TOKEN ?? '');
 
-  if (!safeEqual(token, process.env.NOTIFY_TOKEN ?? '')) {
+  // Recorded unconditionally, before the auth check — so even a call with a
+  // malformed/wrong token still leaves a trace instead of vanishing.
+  await recordInvocation({
+    source: 'notify',
+    title,
+    body,
+    extra: {
+      tokenValid,
+      userAgent: req.headers.get('user-agent') || '',
+      rawQuery: url.search,
+    },
+  });
+
+  if (!tokenValid) {
     return new Response('Unauthorized', { status: 401 });
   }
 
@@ -24,31 +39,7 @@ export default async (req) => {
     process.env.VAPID_PRIVATE_KEY
   );
 
-  const payload = JSON.stringify({ title, body });
-  const store = getStore('subscriptions');
-  const { blobs } = await store.list();
-
-  let sent = 0;
-  let failed = 0;
-
-  await Promise.all(
-    blobs.map(async ({ key }) => {
-      const raw = await store.get(key);
-      if (!raw) return;
-      let sub;
-      try { sub = JSON.parse(raw); } catch { return; }
-
-      try {
-        await webpush.sendNotification(sub, payload);
-        sent++;
-      } catch (err) {
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          await store.delete(key);
-        }
-        failed++;
-      }
-    })
-  );
+  const { sent, failed } = await fanOutPush({ title, body });
 
   return new Response(JSON.stringify({ sent, failed }), {
     status: 200,
